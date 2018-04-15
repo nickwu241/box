@@ -4,16 +4,16 @@ import (
 	"fmt"
 )
 
-type shellCLI struct{}
+type shell struct{}
 
-func (s *shellCLI) echof(format string, a ...interface{}) {
+func (s *shell) echof(format string, a ...interface{}) {
 	fmt.Printf("echo '%s';\n", fmt.Sprintf(format, a...))
 }
 
-func (s *shellCLI) export(key, value string) {
+func (s *shell) export(key, value string) {
 	fmt.Printf("export %s='%s';\n", key, value)
 }
 
-func (s *shellCLI) unset(key string) {
+func (s *shell) unset(key string) {
 	fmt.Printf("unset '%s';\n", key)
 }

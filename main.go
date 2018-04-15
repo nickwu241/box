@@ -4,104 +4,62 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/spf13/viper"
 )
 
 const boxPathEnvKey = "__BOX_ACTIVATED_PATH"
 
-type state struct {
+type box struct {
 	activatedPath string
-	venv          map[string]string
+	pwd           string
+	shell         shell
 }
-
-var shell = shellCLI{}
 
 func main() {
+	box := newBox()
+	box.execute()
+}
+
+func newBox() box {
+	s := shell{}
 	pwd, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
-		shell.echof("error getting current directory: %v", err)
+		s.echof("error getting current directory: %v", err)
 		os.Exit(1)
 	}
-	box(pwd)
+	return box{
+		activatedPath: os.Getenv(boxPathEnvKey),
+		pwd:           pwd,
+		shell:         s,
+	}
 }
 
-func box(pwd string) {
-	s, stateExisted := newState(pwd)
-	if stateExisted {
-		if strings.HasPrefix(pwd, s.activatedPath) {
+func (b *box) execute() {
+	if b.activatedPath != "" {
+		if strings.HasPrefix(b.pwd, b.activatedPath) {
+			// Inside activated.
 			return
 		}
-		s.deactivate()
+		// Outside activated.
+		c := config{b.activatedPath}
+		b.deactivate(c.getVirtualEnvironmentMap())
 		return
 	}
-	s.activate()
+	c := config{b.pwd}
+	b.activate(c.getVirtualEnvironmentMap())
 }
 
-func newState(pwd string) (state, bool) {
-	ap := os.Getenv(boxPathEnvKey)
-	if ap != "" {
-		return state{
-			activatedPath: ap,
-			venv:          getVenv(ap),
-		}, true
-	}
-
-	return state{
-		activatedPath: pwd,
-		venv:          getVenv(pwd),
-	}, false
-}
-
-func getVenv(configPath string) map[string]string {
-	if !configFileExists(configPath) {
-		return nil
-	}
-	viper.SetConfigName("box")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(configPath)
-	if err := viper.ReadInConfig(); err != nil {
-		shell.echof("echo 'error reading box config: %v", err)
-		os.Exit(1)
-	}
-
-	venv := map[string]string{}
-	goVersion := viper.GetString("go")
-	if goVersion != "" {
-		venv["go"] = goVersion
-	}
-	pythonVersion := viper.GetString("python")
-	if pythonVersion != "" {
-		venv["python"] = pythonVersion
-	}
-	if len(venv) == 0 {
-		return nil
-	}
-
-	return venv
-}
-
-func configFileExists(path string) bool {
-	if _, err := os.Stat(filepath.Join(path, "box.yml")); !os.IsNotExist(err) {
-		return true
-	}
-	if _, err := os.Stat(filepath.Join(path, "box.yaml")); !os.IsNotExist(err) {
-		return true
-	}
-	return false
-}
-
-func (s *state) activate() {
-	if s.venv == nil {
+func (b *box) activate(venv map[string]string) {
+	if venv == nil {
 		return
 	}
-	shell.export(boxPathEnvKey, s.activatedPath)
-	shell.echof("activated %v", s.venv)
+	b.shell.export(boxPathEnvKey, b.activatedPath)
+	b.shell.echof("activated %v", venv)
 }
 
-func (s *state) deactivate() {
-	shell.unset(boxPathEnvKey)
-	shell.echof("deactivated %v", s.venv)
-	s.activatedPath = ""
-	s.venv = nil
+func (b *box) deactivate(venv map[string]string) {
+	b.activatedPath = ""
+	b.shell.unset(boxPathEnvKey)
+	if venv != nil {
+		b.shell.echof("deactivated %v", venv)
+	}
 }
