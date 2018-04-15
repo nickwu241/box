@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,10 +15,12 @@ type state struct {
 	venv          map[string]string
 }
 
+var shell = shellCLI{}
+
 func main() {
 	pwd, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
-		fmt.Printf("echo 'error getting current directory: %v';\n", err)
+		shell.echof("error getting current directory: %v", err)
 		os.Exit(1)
 	}
 	box(pwd)
@@ -29,7 +30,6 @@ func box(pwd string) {
 	s, stateExisted := newState(pwd)
 	if stateExisted {
 		if strings.HasPrefix(pwd, s.activatedPath) {
-			// fmt.Println("echo 'activated already';")
 			return
 		}
 		s.deactivate()
@@ -55,14 +55,13 @@ func newState(pwd string) (state, bool) {
 
 func getVenv(configPath string) map[string]string {
 	if !configFileExists(configPath) {
-		// fmt.Printf("echo 'config doesnt exist in %s';\n", configPath)
 		return nil
 	}
 	viper.SetConfigName("box")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(configPath)
 	if err := viper.ReadInConfig(); err != nil {
-		fmt.Printf("echo 'reading box config: %v';\n", err)
+		shell.echof("echo 'error reading box config: %v", err)
 		os.Exit(1)
 	}
 
@@ -79,7 +78,6 @@ func getVenv(configPath string) map[string]string {
 		return nil
 	}
 
-	// fmt.Printf("echo 'getVenv: %v';\n", venv)
 	return venv
 }
 
@@ -95,16 +93,15 @@ func configFileExists(path string) bool {
 
 func (s *state) activate() {
 	if s.venv == nil {
-		// fmt.Println("echo 'nothing to activate';")
 		return
 	}
-	fmt.Printf("export %s='%s';\n", boxPathEnvKey, s.activatedPath)
-	fmt.Printf("echo activated '%v';\n", s.venv)
+	shell.export(boxPathEnvKey, s.activatedPath)
+	shell.echof("activated %v", s.venv)
 }
 
 func (s *state) deactivate() {
-	fmt.Printf("unset '%s';\n", boxPathEnvKey)
-	fmt.Printf("echo deactivated '%v';\n", s.venv)
+	shell.unset(boxPathEnvKey)
+	shell.echof("deactivated %v", s.venv)
 	s.activatedPath = ""
 	s.venv = nil
 }
